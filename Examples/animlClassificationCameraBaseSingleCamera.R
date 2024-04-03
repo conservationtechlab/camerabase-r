@@ -179,8 +179,7 @@ if(removeempty){
   exportdata<-exportdata[exportdata$Species!="Empty",]
 }
 
-cid<-getLastCaptureID(cb)
-if(is.na(cid))cid=0
+cid<-getLastID(cb,"Capture")
 
 export<-data.frame(CaptureID=(cid+1):(cid+nrow(exportdata)),
                    StationID=exportdata$StationID,
@@ -198,7 +197,7 @@ export<-data.frame(CaptureID=(cid+1):(cid+nrow(exportdata)),
                    DayNight="",
                    stringsAsFactors = F)
 
-saveCaptures(cb,export)
+saveData(cb,export,"Capture")
 
 #copy images to Camera Base
 settings<-getSettings(cb)
