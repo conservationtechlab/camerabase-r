@@ -1,19 +1,30 @@
+##############################################################
+# A set of function for reading and writing data
+# to and from Camera Base
+# 
+# Currently only works on Windows. 
+# R and Access need both either need to bwe 32bit or 64bit
+#
+
 library(RODBC)
 library(ggmap)
 library(terra)
 library(OpenStreetMap)
 library(imager)
 
+#open database connection
 openCameraBase<-function(dbfile){
   odbcConnectAccess2007(dbfile)
 }
 
+#close database connection
 closeCameraBase<-function(database){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   close(database)
   rm(database)
 }
 
+#Get all capture data
 getAllData<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Capture.CaptureID,Survey.SurveyID, Station.StationID, Capture.AnimalID, Survey.[Survey Name],Species.SpeciesID, Species.Common, Species.Species, Capture.Date, Capture.Time, Capture.DayNight, Station.X, Station.Y, Station.Elevation, Habitat.Habitat, Station.Group1, Station.Group2, Capture.Sex, Capture.Individuals, Station.CamNumber1, Station.CamNumber2, Capture.Image1, Capture.Image2, Capture.Independent, Capture.Marked, Capture.LeftImage1
@@ -24,12 +35,7 @@ getAllData<-function(database,survey=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
-getLastCaptureID<-function(database){
-  if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
-  sql<-"SELECT max(Capture.CaptureID) as ID from Capture;"
-  as.numeric(sqlQuery(database,sql,stringsAsFactors = FALSE))
-}
-
+#get the last ID for a specific table
 getLastID<-function(database,table){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   if(!(table %in% c("Animal","BatchImageTmp","BatchTmp","Capture","Habitat","Site","Station",
@@ -51,6 +57,7 @@ getLastID<-function(database,table){
   id
 }
 
+#Get site data
 getSites<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Site.SiteID, Site.SiteName, Site.Description 
@@ -62,7 +69,7 @@ getSites<-function(database,survey=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
-
+#get survey data
 getSurveys<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT * FROM Survey "
@@ -72,6 +79,7 @@ getSurveys<-function(database,survey=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
+#get survey ID from survey name
 getSurveyID<-function(database,survey=NULL){
   if(is.null(survey))
     stop("Please provide values for survey.")
@@ -79,6 +87,7 @@ getSurveyID<-function(database,survey=NULL){
   surveylist[match(survey,surveylist$`Survey Name`),"SurveyID"]
 }
 
+#get survey summary statistics
 getSurveySummary<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Survey.SurveyID,Survey.[Survey Name], Survey.StartDate, Survey.EndDate, Survey.Lat, Survey.Long, Survey.CameraDays, Count(Station.StationID) AS Stations
@@ -90,6 +99,7 @@ getSurveySummary<-function(database,survey=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
+#get station data
 getStations<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Station.StationID,Survey.SurveyID, Survey.[Survey Name], Station.HabitatID,Station.X, Station.Y, Station.Elevation, Station.Pair, Station.CamNumber1, Station.CamNumber2, Station.CamModel1, Station.CamModel2, Station.Group1, Station.Group2, Station.Comments 
@@ -100,6 +110,7 @@ getStations<-function(database,survey=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
+#get station summary statistics
 getStationSummary<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Survey.SurveyID,  Station.StationID, Survey.[Survey Name],Station.CamNumber1, Station.CamNumber2, Station.X, Station.Y, Station.Group1, Station.Group2, Min(Capture.Date) AS MinOfDate, Max(Capture.Date) AS MaxOfDate, Count(Capture.CaptureID) AS Images
@@ -111,6 +122,7 @@ getStationSummary<-function(database,survey=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
+#get dates for first and last image for each station
 getStationImageDates<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Station.SurveyID, Station.StationID, 1 AS Camera, Min(Capture.Date) AS Start, Max(Capture.Date) AS End
@@ -130,6 +142,7 @@ getStationImageDates<-function(database,survey=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
+#get station dates from the Station_Dates table
 getStationDates<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Station_Dates.Station_DatesID, Station_Dates.StationID, Station_Dates.Camera, Station_Dates.Start, Station_Dates.End
@@ -140,12 +153,14 @@ FROM (Survey INNER JOIN Station ON Survey.SurveyID = Station.SurveyID) INNER JOI
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
+#get species data
 getSpecies<-function(database){
   sqlQuery(database,
            paste0("SELECT * FROM Species;"),
            stringsAsFactors = FALSE)
 }
 
+#get species ID from scientific or common name
 getSpeciesID<-function(database,species=NULL,common=NULL){
   if(!is.null(species) && !is.null(common))
     stop("Please provide values for species or common but not both.")
@@ -159,6 +174,7 @@ getSpeciesID<-function(database,species=NULL,common=NULL){
   }
 }
 
+#get a summary for all species (number of events, cameras and frequency)
 getSpeciesSummary<-function(database,survey,species=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")  
   sql<-"SELECT Survey.[Survey Name], Species.Common, Species.Species, Count(Capture.Date) AS Events,Avg(SpeciesCamera2.CountOfStationID) AS Cameras, Round(Count(Capture.Date)/Max(Survey.CameraDays)*1000,2) AS Frequency
@@ -174,6 +190,7 @@ getSpeciesSummary<-function(database,survey,species=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
+#get detection data for identified individuals
 getIndividualDetections<-function(database,survey=NULL,species=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Survey.SurveyID, Station.StationID, Capture.CaptureID, Animal.AnimalID, Species.SpeciesID, Species.Common, Species.Species, Station.X, Station.Y, Animal.Code, Animal.Sex, Animal.Age, Capture.Date, Capture.Time, Capture.Image1, Capture.Image2, Capture.LeftImage1 
@@ -192,6 +209,7 @@ getIndividualDetections<-function(database,survey=NULL,species=NULL){
   sqlQuery(database, sql, stringsAsFactors = FALSE)
 }
 
+#get animal data
 getAnimals<-function(database,survey=NULL,species=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Animal.AnimalID, Animal.SpeciesID, Animal.Code, Animal.Sex, Animal.Age, Animal.Description, Animal.Comments
@@ -212,6 +230,7 @@ getAnimals<-function(database,survey=NULL,species=NULL){
   sqlQuery(database, sql, stringsAsFactors = FALSE)
 }
 
+#get habitat data
 getHabitat<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Habitat.HabitatID, Habitat.Habitat
@@ -223,6 +242,7 @@ getHabitat<-function(database,survey=NULL){
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
 
+#get batch data
 getBatches<-function(database){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Survey.SurveyID, Station.CamNumber1, Station.CamNumber2, BatchTmp.BatchID FROM Survey 
@@ -230,6 +250,7 @@ getBatches<-function(database){
   sqlQuery(database, sql, stringsAsFactors = FALSE)  
 }
 
+#get batch image data
 getBatcheImages<-function(database,batch=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT * FROM BatchImageTmp "
@@ -240,12 +261,14 @@ getBatcheImages<-function(database,batch=NULL){
   sqlQuery(database, sql, stringsAsFactors = FALSE) 
 }
 
+#get settings
 getSettings<-function(database){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT TOP 1 Settings.ImageDir, Settings.BinDir , Settings.renamefiles FROM Settings;"
   sqlQuery(database, sql, stringsAsFactors = FALSE)  
 }
 
+#save batch data
 saveBatch<-function(database,batch,batchimages){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   batchid<-as.integer(sqlQuery(database, "SELECT Max(BatchTmp.BatchID) AS MaxOfBatchID FROM BatchTmp;",stringsAsFactors = FALSE))
@@ -256,11 +279,7 @@ saveBatch<-function(database,batch,batchimages){
   sqlSave(database,batchimages,tablename="BatchImageTmp",append=T,rownames = F,fast=F)
 }
 
-saveCaptures<-function(database,data){
-  if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
-  sqlSave(database,data,tablename="Capture",append=T,rownames = F,fast=F)
-}
-
+#write data to a specific table
 saveData<-function(database,data,table){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   if(!(table %in% c("Animal","BatchImageTmp","BatchTmp","Capture","Habitat","Site","Station",
@@ -268,17 +287,19 @@ saveData<-function(database,data,table){
     sqlSave(database,data,tablename=table,append=T,rownames = F, colnames = FALSE ,fast=F)
 }
 
-
+#update the species ID for a list of capture IDs
 updateSpeciesID<-function(database,data){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sqlUpdate(database,data[,c("CaptureID","SpeciesID")],tablename="Capture",index="CaptureID")
 }
 
+#update species IDs in the batch tables
 updateSpeciesIDBatch<-function(database,data){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sqlUpdate(database,data[,c("BatchImageTmpID","BatchID","SpeciesID")],tablename="BatchImageTmp",index=c("BatchImageTmpID","BatchID"))
 }
 
+#get a matrix of days when cameras were active (occupancy and scr modeling)
 getCameraDayMatrix<-function(database,survey=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   if(is.null(survey))
@@ -313,7 +334,7 @@ getCameraDayMatrix<-function(database,survey=NULL){
   list(summary=tapply(apply(camdays,1,sum),stationdata$`Survey Name`,sum),stationdata=stationdata,cameradays=camdays)
 }
 
-
+#get a detection matrix (occupancy modeling)
 getDetectionyMatrix<-function(database,survey=NULL,species=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   specieslist<-getSpecies(database)
@@ -364,6 +385,7 @@ getDetectionyMatrix<-function(database,survey=NULL,species=NULL){
   detections
 }
 
+#plot a map of all the stations using the OpenStreetMap package
 plotStations<-function(database,survey=NULL,species=NULL,type="osm",buffer=0.25,size=3,crs="+proj=utm +zone=19 +south +ellps=WGS84 +datum=WGS84"){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   if(is.null(survey))
@@ -401,7 +423,7 @@ plotStations<-function(database,survey=NULL,species=NULL,type="osm",buffer=0.25,
   #plot(latlong,add=T,col="magenta",cex=1.2)
 }
 
-
+#save image to the database, under development, untested
 saveImage<-function(database,file,camera,datetime,survey){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   if(!file.exists(file))stop("The image file does not exist.")
@@ -447,7 +469,7 @@ saveImage<-function(database,file,camera,datetime,survey){
 }
 
 
-
+#match image pairs for paired camera (analog to the process used in Batch Import)
 matchPairs<-function(images,stations,tolerance=180,offset1=0,offset2=0,offset_video=0,interval=15){
   bti=1 #BatchImageTempID
   bi=1 #BatchID
