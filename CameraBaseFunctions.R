@@ -47,8 +47,8 @@ getLastID<-function(database,table){
          Capture={sql<-"SELECT max(Capture.CaptureID) as ID from Capture;"},
          Habitat={sql<-"SELECT max(HabitatID) as ID from Habitat;"},
          Site={sql<-"SELECT max(SiteID) as ID from Site;"},
-         Station={sql<-"SELECT max(Station_DatesID) as ID from Station_Dates;"},
-         Station_Dates={sql<-"SELECT max(StationID) as ID from Station;"},
+         Station={sql<-"SELECT max(Station_DatesID) as ID from Station;"},
+         Station_Dates={sql<-"SELECT max(StationID) as ID from Station_Dates;"},
          Species={sql<-"SELECT max(SpeciesID) as ID from Species;"},
          Survey={sql<-"SELECT max(SurveyID) as ID from Survey;"}
   )

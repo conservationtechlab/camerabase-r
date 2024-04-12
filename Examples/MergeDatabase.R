@@ -8,6 +8,7 @@ dbfile2<-"D:/DataMerge/CameraBase2.mdb" #data will be copied from here
 surveys="1,2"
 
 #fix issue in RODBC package for field names with spaces
+f<-RODBC:::sqlwrite
 f<-deparse1(f,collapse="\n")
 f<-gsub("mangleColNames","",f)
 f<-gsub("odbcValidChannel","RODBC:::odbcValidChannel",f)
@@ -162,10 +163,6 @@ if(nrow(animals2[animals2$NewAnimal==T,])>0){
   saveData(cb1,animals2[animals2$NewAnimal==T,1:(ncol(animals2)-2)],"Animal")
 }
 
-#close databases
-closeCameraBase(cb1)
-closeCameraBase(cb2)
-
 
 #Compare data in the two databases
 sp1<-getSpeciesSummary(cb1,surveys2$SurveyID)
@@ -173,4 +170,9 @@ sp2<-getSpeciesSummary(cb2,surveys)
 
 (sp12<-merge(sp1,sp2,by="Species"))
 
+mean(sp12$Frequency.x==sp12$Frequency.y) #if everything worked this is 1
+
+#close databases
+closeCameraBase(cb1)
+closeCameraBase(cb2)
 
