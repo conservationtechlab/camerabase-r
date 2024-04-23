@@ -284,7 +284,7 @@ saveData<-function(database,data,table){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   if(!(table %in% c("Animal","BatchImageTmp","BatchTmp","Capture","Habitat","Site","Station",
                     "Station_Dates","Species","Survey")))stop("Please provide a valid table name.")
-    sqlSave(database,data,tablename=table,append=T,rownames = F, colnames = FALSE ,fast=F)
+    sqlSave(database,data,tablename=table,append=TRUE,rownames = FALSE,colnames = FALSE,fast=FALSE)
 }
 
 #update the species ID for a list of capture IDs

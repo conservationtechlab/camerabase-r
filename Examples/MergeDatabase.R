@@ -28,6 +28,7 @@ sites1<-getSites(cb1)
 sites2<-getSites(cb2,surveys)
 
 if(nrow(sites2)>0){
+  sites2$SiteIDNew<-NA
   if(nrow(sites1)>0) sites2$SiteIDNew<-sites1$SiteID[match(sites2$SiteName,sites1$SiteName)]
   sites2$NewSite<-FALSE
   sites2$NewSite[is.na(sites2$SiteIDNew)]<-TRUE
@@ -39,6 +40,7 @@ surveys1<-getSurveys(cb1)
 surveys2<-getSurveys(cb2,surveys)
 
 if(nrow(surveys2)>0){
+  surveys2$SurveyIDNew<-NA
   if(nrow(surveys1)>0) surveys2$SurveyIDNew<-surveys1$SurveyID[match(surveys2$"Survey Name",surveys1$"Survey Name")]
   surveys2$NewSyurvey=FALSE
   surveys2$NewSyurvey[is.na(surveys2$SurveyIDNew)]<-TRUE
@@ -52,6 +54,7 @@ habitat1<-getHabitat(cb1)
 habitat2<-getHabitat(cb2,surveys)
 
 if(nrow(habitat2)>0){
+  habitat2$HabitatIDNew<-NA
   if(nrow(habitat1)>0) habitat2$HabitatIDNew<-habitat1$HabitatID[match(habitat2$Habitat,habitat1$Habitat)]
   habitat2$NewHabitat<-FALSE
   habitat2$NewHabitat[is.na(habitat2$HabitatIDNew)]<-TRUE
@@ -63,10 +66,11 @@ stations1<-getStations(cb1)
 stations2<-getStations(cb2,surveys)
 
 if(nrow(stations2)>0){
+  stations2$StationIDNew<-NA
   if(nrow(surveys2)>0) stations2$SurveyID<-surveys2$SurveyIDNew[match(stations2$SurveyID,surveys2$SurveyID)]
   if(nrow(habitat2)>0) stations2$HabitatID<-habitat2$HabitatIDNew[match(stations2$HabitatID,habitat2$HabitatID)]
   
-  if(nrow(stations1)) stations2$StationIDNew<-merge(stations2[,c("SurveyID","CamNumber1","CamNumber2")],stations1[,c("SurveyID","CamNumber1","CamNumber2","StationID")],all.x=T)$StationID
+  if(nrow(stations1)) stations2[order(stations2$SurveyID,stations2$CamNumber1,stations2$CamNumber2),]$StationIDNew<-merge(stations2[,c("SurveyID","CamNumber1","CamNumber2")],stations1[,c("SurveyID","CamNumber1","CamNumber2","StationID")],all.x=T)$StationID
   stations2$NewStation<-FALSE
   stations2$NewStation[is.na(stations2$StationIDNew)]<-TRUE
   stations2$StationIDNew[is.na(stations2$StationIDNew)]<-getLastID(cb1,"Station")+(1:nrow(stations2[is.na(stations2$StationIDNew),]))
@@ -77,6 +81,7 @@ species1<-getSpecies(cb1)
 species2<-getSpecies(cb2)
 
 if(nrow(species2)>0){
+  species2$SpeciesIDNew<-NA
   if(nrow(species1)) species2$SpeciesIDNew<-species1$SpeciesID[match(species2$"Species",species1$"Species")]
   species2$NewSpecies=FALSE
   species2$NewSpecies[is.na(species2$SpeciesIDNew)]<-TRUE
@@ -98,7 +103,8 @@ cameradays2<-getStationDates(cb2,surveys)
 
 if(nrow(cameradays2)>0){
   if(nrow(stations2)) cameradays2$StationID<-stations2$StationIDNew[match(cameradays2$StationID,stations2$StationID)]
-  if(nrow(cameradays1)) cameradays2$Station_DatesIDNew<-merge(cameradays2[,c("StationID","Camera","Start","End")],cameradays1[,c("StationID","Camera","Start","End","Station_DatesID")],all.x=T)$Station_DatesID
+  cameradays2$Station_DatesIDNew<-NA
+  if(nrow(cameradays1)) cameradays2[order(cameradays2$StationID,cameradays2$Camera,cameradays2$Start,cameradays2$End),]$Station_DatesIDNew<-merge(cameradays2[,c("StationID","Camera","Start","End")],cameradays1[,c("StationID","Camera","Start","End","Station_DatesID")],all.x=T)$Station_DatesID
   cameradays2$NewStationDate<-FALSE
   cameradays2$NewStationDate[is.na(cameradays2$Station_DatesIDNew)]<-TRUE
   cameradays2$Station_DatesIDNew[is.na(cameradays2$Station_DatesIDNew)]<-getLastID(cb1,"Station_Dates")+(1:nrow(cameradays2[is.na(cameradays2$Station_DatesIDNew),]))
@@ -110,7 +116,10 @@ animals2<-getAnimals(cb2,surveys)
 
 if(nrow(animals2)>0){
   if(nrow(species2)) animals2$SpeciesID<-species2$SpeciesIDNew[match(animals2$SpeciesID,species2$SpeciesID)]
-  if(nrow(animals1)) animals2$AnimalIDNew<-merge(animals2[,c("SpeciesID","Code")],animals1[,c("SpeciesID","Code","AnimalID")],all.x=T)$AnimalID
+  an<-merge(animals2[,c("SpeciesID","Code")],animals1[,c("SpeciesID","Code","AnimalID")],by="Code")
+  if(sum(an$SpeciesID.x!=an$SpeciesID.y)>0)stop("Some Animal codes are duplicated for different species. Please fix before merging.")
+  animals2$AnimalIDNew<-NA
+  if(nrow(animals1)) animals2[order(animals2$SpeciesID,animals2$Code),]$AnimalIDNew<-merge(animals2[,c("SpeciesID","Code")],animals1[,c("SpeciesID","Code","AnimalID")],all.x=T)$AnimalID
   animals2$NewAnimal<-FALSE
   animals2$NewAnimal[is.na(animals2$AnimalIDNew)]<-TRUE
   animals2$AnimalIDNew[is.na(animals2$AnimalIDNew)]<-getLastID(cb1,"Animal")+(1:nrow(animals2[is.na(animals2$AnimalIDNew),]))
@@ -129,6 +138,11 @@ if(nrow(captures2)>0){
 
 
 #save data to database
+if(nrow(species2[species2$NewSpecies==T,])>0){
+  species2$SpeciesID<-species2$SpeciesIDNew
+  saveData(cb1,species2[species2$NewSpecies==T,1:(ncol(species2)-2)],"Species")
+}
+
 if(nrow(sites2[sites2$NewSite==T,])>0){
   sites2$SiteID<-sites2$SiteIDNew
   saveData(cb1,sites2[sites2$NewSite==T,1:(ncol(sites2)-2)],"Site")
@@ -164,13 +178,33 @@ if(nrow(animals2[animals2$NewAnimal==T,])>0){
 }
 
 
-#Compare data in the two databases
+#Compare data in the two databases to see if merge was successful
+#this will not work if data were merged into an existing survey
+#capture frequency for all species
 sp1<-getSpeciesSummary(cb1,surveys2$SurveyID)
 sp2<-getSpeciesSummary(cb2,surveys)
 
 (sp12<-merge(sp1,sp2,by="Species"))
 
-mean(sp12$Frequency.x==sp12$Frequency.y) #if everything worked this is 1
+if(mean(sp12$Frequency.x==sp12$Frequency.y)<1)stop("Something went wrong with the data merge.")
+
+#check camera days
+cd1<-getCameraDayMatrix(cb1,surveys2$SurveyID)
+cd2<-getCameraDayMatrix(cb2,surveys)
+
+if(sum(cd1$cameradays!=cd2$cameradays)>0)stop("Something went wrong when mearging camera days.")
+
+#check detection matrices
+dm1<-getDetectionyMatrix(cb1,surveys2$SurveyID)
+dm2<-getDetectionyMatrix(cb2,surveys)
+
+dm1<-dm1[!is.na(dimnames(dm1)[[1]]),,]
+dm2<-dm2[!is.na(dimnames(dm2)[[1]]),,]
+
+dm1<-dm1[dimnames(dm1)[[1]] %in% dimnames(dm2)[[1]],,]
+
+if(!(sum(dm1==dm1,na.rm=T)==sum(dm1==dm2,na.rm=T)))stop("Something went wrong with the data merge.")
+
 
 #close databases
 closeCameraBase(cb1)
