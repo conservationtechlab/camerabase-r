@@ -57,7 +57,7 @@ images$NewName=paste(images$Camera,format(images$DateTime,format="%Y%m%d_%H%M%S"
 stations<-getStations(cb,cbsurvey)
 images$StationID<-stations[match(images$Camera,stations$CamNumber1),]$StationID
 
-if(sum(is.na(imagesall$StationID))>0)stop(paste("Warning:",sum(is.na(imagesall$StationID)),"images don't have a matching StationID"))
+if(sum(is.na(images$StationID))>0)stop(paste("Warning:",sum(is.na(imagesall$StationID)),"images don't have a matching StationID"))
 
 
 ####################
