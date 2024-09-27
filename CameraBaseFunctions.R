@@ -25,15 +25,30 @@ closeCameraBase<-function(database){
 }
 
 #Get all capture data
-getAllData<-function(database,survey=NULL){
+getAllData<-function(database,survey=NULL,species=NULL,independent=FALSE){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
-  sql<-"SELECT Capture.CaptureID,Survey.SurveyID, Station.StationID, Capture.AnimalID, Survey.[Survey Name],Species.SpeciesID, Species.Common, Species.Species, Capture.Date, Capture.Time, Capture.DayNight, Station.X, Station.Y, Station.Elevation, Habitat.Habitat, Station.Group1, Station.Group2, Capture.Sex, Capture.Individuals, Station.CamNumber1, Station.CamNumber2, Capture.Image1, Capture.Image2, Capture.Independent, Capture.Marked, Capture.LeftImage1
+  sql<-"SELECT Capture.CaptureID,Survey.SurveyID, Station.StationID, Capture.AnimalID, Survey.[Survey Name],Species.SpeciesID, Species.Common, Species.Species, Capture.Date, Capture.Time, Capture.DayNight, Station.X, Station.Y, Station.Elevation, Habitat.Habitat, Station.Group1, Station.Group2, Capture.Sex, Capture.Individuals, Station.CamNumber1, Station.CamNumber2, Capture.Image1, Capture.Image2, Capture.Independent, Capture.Marked, Capture.LeftImage1,Animal.Code
   FROM Habitat RIGHT JOIN (Survey RIGHT JOIN (Station INNER JOIN (Species RIGHT JOIN (Animal RIGHT JOIN Capture ON Animal.AnimalID = Capture.AnimalID) ON Species.SpeciesID = Capture.SpeciesID) ON Station.StationID = Capture.StationID) ON Survey.SurveyID = Station.SurveyID) ON Habitat.HabitatID = Station.HabitatID "
+  add=F
+  if(!is.null(survey) | !is.null(species) | independent){
+    sql<-paste0(sql,"WHERE")
+  }
   if(!is.null(survey)){
-    sql<-paste0(sql,"WHERE Survey.SurveyID IN (",paste(survey,collapse=","),") ")}
-  sql<-paste0(sql,"ORDER BY Survey.[Survey Name], Species.Common, Station.CamNumber1, Capture.Date, Capture.Time;")
+    sql<-paste0(sql," Survey.SurveyID IN (",paste(survey,collapse=","),")")
+    add=T
+  }
+  if(independent){  
+    if(add)sql<-paste(sql,"AND")
+    sql<-paste0(sql," Independent=1 ")
+  }
+  if(!is.null(species)){  
+    if(add)sql<-paste(sql,"AND")
+    sql<-paste0(sql," Species.Common IN (",paste(sQuote(species,F),collapse=","),")")
+  }
+  sql<-paste0(sql," ORDER BY Survey.[Survey Name], Species.Common, Station.CamNumber1, Capture.Date, Capture.Time;")
   sqlQuery(database,sql,stringsAsFactors = FALSE)
 }
+
 
 #get the last ID for a specific table
 getLastID<-function(database,table){
@@ -195,6 +210,7 @@ getIndividualDetections<-function(database,survey=NULL,species=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Survey.SurveyID, Station.StationID, Capture.CaptureID, Animal.AnimalID, Species.SpeciesID, Species.Common, Species.Species, Station.X, Station.Y, Animal.Code, Animal.Sex, Animal.Age, Capture.Date, Capture.Time, Capture.Image1, Capture.Image2, Capture.LeftImage1 
               FROM (Animal INNER JOIN ((Survey INNER JOIN Station ON Survey.SurveyID = Station.SurveyID) INNER JOIN Capture ON Station.StationID = Capture.StationID) ON Animal.AnimalID = Capture.AnimalID) INNER JOIN Species ON Capture.SpeciesID = Species.SpeciesID "
+  add=F
   if(!is.null(survey) | !is.null(species)){
     sql<-paste0(sql,"WHERE")
   }
@@ -213,7 +229,8 @@ getIndividualDetections<-function(database,survey=NULL,species=NULL){
 getAnimals<-function(database,survey=NULL,species=NULL){
   if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
   sql<-"SELECT Animal.AnimalID, Animal.SpeciesID, Animal.Code, Animal.Sex, Animal.Age, Animal.Description, Animal.Comments
-        FROM Animal INNER JOIN ((Survey INNER JOIN Station ON Survey.SurveyID = Station.SurveyID) INNER JOIN Capture ON Station.StationID = Capture.StationID) ON Animal.AnimalID = Capture.AnimalID "
+        FROM (Animal INNER JOIN ((Survey INNER JOIN Station ON Survey.SurveyID = Station.SurveyID) INNER JOIN Capture ON Station.StationID = Capture.StationID) ON Animal.AnimalID = Capture.AnimalID) INNER JOIN Species ON Animal.SpeciesID = Species.SpeciesID "
+  add=F
   if(!is.null(survey) | !is.null(species)){
     sql<-paste0(sql,"WHERE")
   }
@@ -225,7 +242,7 @@ getAnimals<-function(database,survey=NULL,species=NULL){
     if(add)sql<-paste(sql,"AND")
     sql<-paste0(sql," Species.Common IN (",paste(sQuote(species,F),collapse=","),")")
   }
-  sql<-paste0(sql,"GROUP BY Animal.AnimalID, Animal.SpeciesID, Animal.Code, Animal.Sex, Animal.Age, Animal.Description, Animal.Comments
+  sql<-paste0(sql," GROUP BY Animal.AnimalID, Animal.SpeciesID, Animal.Code, Animal.Sex, Animal.Age, Animal.Description, Animal.Comments
               ORDER BY Animal.AnimalID;")
   sqlQuery(database, sql, stringsAsFactors = FALSE)
 }
@@ -316,6 +333,7 @@ getCameraDayMatrix<-function(database,survey=NULL){
   
   surveysum<-getSurveySummary(database,survey)
   totalday<-round(surveysum$EndDate-surveysum$StartDate+1,0)
+  data$EndInt[data$EndInt>totalday]<-totalday
   
   camdays<-matrix(0,length(unique(data$StationID)),max(totalday))
   
@@ -556,6 +574,108 @@ matchPairs<-function(images,stations,tolerance=180,offset1=0,offset2=0,offset_vi
     }
   }
   list(batch=batch,batchimage=batchimage)
+}
+
+#Get all capture data
+getCaptureData<-function(database,survey=NULL,species=NULL,independent=TRUE){
+  if(!inherits(database,"RODBC"))stop("Please provide a valid RODBC database connection.")
+  sql<-"SELECT Survey.SurveyID, Survey.[Survey Name], Station.StationID, Station.CamNumber1, Station.CamNumber2, Capture.CaptureID, Capture.Date, Capture.Time, Capture.SpeciesID, Species.Species, Species.Common, Animal.AnimalID, Animal.Code, Animal.Sex, Animal.Age, Capture.Date-Survey.StartDate AS [Day]
+FROM Species INNER JOIN (Animal RIGHT JOIN ((Survey INNER JOIN Station ON Survey.SurveyID = Station.SurveyID) INNER JOIN Capture ON Station.StationID = Capture.StationID) ON Animal.AnimalID = Capture.AnimalID) ON Species.SpeciesID = Capture.SpeciesID "
+  add=F
+  sql<-paste0(sql,"WHERE Capture.Date>=Survey.StartDate AND Capture.Date <=Survey.EndDate AND Animal.AnimalID>0 AND")
+  if(!is.null(survey)){
+    sql<-paste0(sql," Survey.SurveyID IN (",paste(survey,collapse=","),")")
+    add=T
+  }
+  if(independent){  
+    if(add)sql<-paste(sql,"AND")
+    sql<-paste0(sql," Independent=1 ")
+  }
+  if(!is.null(species)){  
+    if(add)sql<-paste(sql,"AND")
+    sql<-paste0(sql," Species.Common IN (",paste(sQuote(species,F),collapse=","),")")
+  }
+  sql<-paste0(sql," ORDER BY Survey.[Survey Name], Species.Common, Station.CamNumber1, Capture.Date, Capture.Time;")
+  sqlQuery(database,sql,stringsAsFactors = FALSE)
+}
+
+getCaptureHistory<-function(conn,surveyid=NA,species=NA,method=NA,remove.young=T){
+  if(is.na(surveyid[1]))stop("Please provide at least one Survey ID")
+  if(!(method %in% c("secr","oSCR","JAGS")))stop("Method must be secr, oSCR or JAGS")   
+  
+  
+  if(method=="secr"){
+    require(secr)
+    traps<-list() #secr traps list
+    nocc<-numeric() #number of occasions for each survey
+    n=1
+    for(s in surveyid){  #compile data for a multi-session capture history
+      captdata<-getCaptureData(conn,s,species)
+      if(nrow(captdata)==0)stop("The selected survey does not have any captures for the species.")
+      usage<-getCameraDayMatrix(conn,s)
+      colnames(usage$stationdata)[5:6]<-c("x","y")
+      traps[[n]]<-read.traps(data=usage$stationdata[,c("StationID","x","y")],trapID="StationID",detector="proximity")
+      usage(traps[[n]])<-usage$cameradays
+      covariates(traps[[n]])<-usage$stationdata[,c("Elevation","Group1","Group2")]
+      #names(covariates(traps[[n]]))<-"Trail"
+      nocc[n]<-ncol(usage$cameradays)
+      if(n==1){
+        captures<-captdata
+      }else{
+        captures<-rbind(captures,captdata)
+      }
+      n=n+1
+    }
+    
+    traps<-shareFactorLevels(traps)
+    
+    captures$Sex[captures$Sex=="Unknown"]<-NA
+    captures$Sex<-factor(captures$Sex,levels=c("Female","Male",NA))
+    captures$Survey_Name<-factor(captures$"Survey Name",ordered=F,levels=unique(captures$"Survey Name"))
+    #if(remove.young)captures<-captures[captures$Age != "young",]
+    
+    if(length(traps)==1){
+      capthist<-make.capthist(captures=captures[,c("Survey_Name","AnimalID","Day","StationID","Sex","Age")],traps=traps[[1]],fmt="trapID",sortrows = F,noccasions=nocc)
+    }else{  
+      capthist<-make.capthist(captures=captures[,c("Survey_Name","AnimalID","Day","StationID","Sex","Age")],traps=traps,fmt="trapID",sortrows = F,noccasions=nocc)
+    }
+    capthist<-reduce(capthist,by = "all", outputdetector = 'count')
+    capthist<-shareFactorLevels(capthist)
+    capthist
+    
+  }else if(method=="oSCR"){
+    require(oSCR)
+    tdf<-list() #oSCR traps list
+    nocc<-numeric() #number of occasions for each survey
+    n=1
+    for(s in surveyid){  #compile data for a multi-session capture history
+      captdata<-getCaptureData(conn,s,species)
+      if(nrow(captdata)==0)stop("The selected survey does not have any captures for the species.")
+      usage<-getCameraDayMatrix(conn,s)
+      colnames(usage$stationdata)[5:6]<-c("x","y")
+      captdata$UID <- s
+      tdf[[n]]<-cbind(usage$stationdata[,c("StationID","x","y")],usage$cameradays,"/",usage$stationdata[,c("Elevation","Group1","Group2")])
+      nocc[n]<-ncol(usage$cameradays)
+      if(n==1){
+        captures<-captdata
+      }else{
+        captures<-rbind(captures,captdata)
+      }
+      n=n+1
+    }
+    captures$Sex[captures$Sex=="Unknown"]<-NA
+    captures$Sex<-factor(captures$Sex,levels=c("Female","Male",NA))
+    captures$Survey_Name<-factor(captures$"Survey Name",ordered=F,levels=unique(captures$"Survey Name"))
+    captures$SurveyID<-as.numeric(captures$Survey_Name)
+    #captures$SurveyID<-as.numeric(captures$UID)
+    #if(remove.young)captures<-captures[captures$Age != "young",]
+    
+    capthist<-data2oscr(captures,sess.col=1,id.col=12,occ.col=16,trap.col=3,sex.col=14,
+                        tdf=tdf,tdf.sep="/",K=nocc,ntraps=sapply(tdf,nrow),sex.nacode=NA)
+    capthist
+  }else if(method=="JAGS"){
+    print("JAGS is not yet supported.")
+  }
 }
 
 
